@@ -1,0 +1,30 @@
+# .gitignore
+
+# Data
+data/
+*.csv
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Models
+*.pt
+*.pth
+checkpoints/
+runs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code
+.vscode/
+
+# Colab
+.ipynb_checkpoints/
+
+# Misc
+.DS_Store
+.env

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from transformers import CLIPModel
+
 from decoder import FullCaptionDecoder
 
 class ClipCaptionModel(nn.Module):
@@ -25,10 +26,10 @@ class ClipCaptionModel(nn.Module):
         self.prefix_length = prefix_length
         self.d_model = d_model
 
-        # Projection from image features to decoder input
+        # Project image features to prefix token embeddings
         self.project = nn.Linear(clip_dim, d_model * prefix_length)
 
-        # Use CLIP's text embedding for tokens
+        # Store token_embed at top level to match saved checkpoint
         self.token_embed = self.clip.text_model.embeddings.token_embedding
 
         # Decoder
@@ -43,22 +44,26 @@ class ClipCaptionModel(nn.Module):
         )
 
     def forward(self, pixel_values, input_ids, labels=None, mask=None):
-        batch_size = pixel_values.size(0)
+        batch_size = input_ids.size(0)
 
-        # Extract image features from CLIP
-        with torch.no_grad():
-            image_features = self.clip.get_image_features(pixel_values=pixel_values)
+        # If image features are passed, process with CLIP
+        if pixel_values is not None:
+            with torch.no_grad():
+                image_features = self.clip.get_image_features(pixel_values=pixel_values)
+            projected = self.project(image_features)
+            memory = projected.view(batch_size, self.prefix_length, self.d_model)
+        else:
+            memory = None
 
-        # Project and reshape to prefix token embeddings
-        projected = self.project(image_features)  # [B, d_model * prefix_len]
-        memory = projected.view(batch_size, self.prefix_length, self.d_model)
-
-        # Run custom decoder
+        # Run the decoder
         logits = self.decoder(input_ids, memory, mask=mask)
 
-        # Compute loss if labels are provided
+        # Optional loss computation
         loss = None
         if labels is not None:
+            if labels.dim() == 3:
+                labels = labels.squeeze(1)
+
             loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
             loss = loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
 

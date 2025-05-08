@@ -1,1 +1,2 @@
-pip install torch torchvision transformers pandas pillow tqdm
+pip install torch torchvision transformers pandas pillow tqdm datasets
+pip install nltk

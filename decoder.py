@@ -1,11 +1,8 @@
 import torch
 import torch.nn as nn
 import math
-import numpy as np
-
 
 def scaled_dot_product_attention(q, k, v, mask=None):
-    # print("📏 attention shapes → q:", q.shape, "k:", k.shape, "v:", v.shape)
     d_k = q.size(-1)
     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
 
@@ -19,7 +16,6 @@ def scaled_dot_product_attention(q, k, v, mask=None):
     attn = torch.softmax(scores, dim=-1)
     return torch.matmul(attn, v)
 
-
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=512):
         super().__init__()
@@ -28,11 +24,13 @@ class PositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe.unsqueeze(0))
+        self.register_buffer('pe', pe.unsqueeze(0))  # shape: [1, max_len, d_model]
 
     def forward(self, x):
-        return x + self.pe[:, :x.size(1)]
-
+        seq_len = x.size(1)
+        if seq_len > self.pe.size(1):
+            raise ValueError(f"Sequence length {seq_len} exceeds positional encoding limit {self.pe.size(1)}")
+        return x + self.pe[:, :seq_len]
 
 class CustomDecoderBlock(nn.Module):
     def __init__(self, d_model, heads, ff_dim):
@@ -75,28 +73,22 @@ class CustomDecoderBlock(nn.Module):
 
         return self.norm3(x + self.ff(x))
 
-
 class FullCaptionDecoder(nn.Module):
     def __init__(self, clip_text_embedding, vocab_size, d_model=512, num_layers=2, heads=8, ff_dim=2048, max_len=80):
         super().__init__()
-        self.token_embed = clip_text_embedding  # restored to CLIP's embedding
+        self.token_embed = clip_text_embedding
         self.pos_enc = PositionalEncoding(d_model, max_len)
         self.layers = nn.ModuleList([CustomDecoderBlock(d_model, heads, ff_dim) for _ in range(num_layers)])
         self.output_layer = nn.Linear(d_model, vocab_size)
 
     def forward(self, input_ids, memory, mask=None):
         x = self.token_embed(input_ids)
-        # print("🧪 token_embed output:", x.shape)
-        # print("🧪 memory shape:", memory.shape)
-
         x = self.pos_enc(x)
 
         if mask is None:
             seq_len = input_ids.size(1)
             mask = torch.tril(torch.ones((seq_len, seq_len), dtype=torch.bool))
             mask = mask.unsqueeze(0).unsqueeze(0).to(input_ids.device)
-
-        # print("🧪 mask shape:", mask.shape)
 
         for layer in self.layers:
             x = layer(x, context=memory, tgt_mask=mask)

@@ -20,7 +20,7 @@ vocab_size = tokenizer.vocab_size
 dataset = ClipCaptionDataset(
     image_dir="data/Flick30k_Images",
     caption_csv="data/results.csv",
-    limit = 100
+    # limit = 100
 )
 
 dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
@@ -30,7 +30,7 @@ model = ClipCaptionModel(vocab_size=vocab_size)
 model.to(device)
 
 # Optimizer
-optimizer = AdamW(model.parameters(), lr=5e-5)
+optimizer = AdamW(model.parameters(), lr=1e-5)
 
 # Training loop
 epochs = 10
